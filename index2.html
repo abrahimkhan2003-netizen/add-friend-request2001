@@ -1,0 +1,85 @@
+const { Telegraf } = require('telegraf');
+const { Client, LocalAuth } = require('whatsapp-web.js');
+const qrcode = require('qrcode-terminal');
+const fs = require('fs');
+
+// ১. আপনার বটের টোকেন এখানে বসানো হয়েছে
+const bot = new Telegraf('8559810386:AAED1MAj5UBg9YwO-FR6lgKu_45i3AebkDA');
+
+// WhatsApp Client Setup
+const whatsappClient = new Client({
+  authStrategy: new LocalAuth(),
+  puppeteer: {
+    args: ['--no-sandbox']
+  }
+});
+
+let chatMappings = {};
+
+// ২. ফাইল থেকে ম্যাপিং লোড করা
+if (fs.existsSync('mappings.json')) {
+  chatMappings = JSON.parse(fs.readFileSync('mappings.json', 'utf8'));
+}
+
+// WhatsApp Events
+whatsappClient.on('qr', (qr) => {
+  console.log('WhatsApp QR Code স্ক্যান করুন:');
+  qrcode.generate(qr, { small: true });
+});
+
+whatsappClient.on('ready', () => {
+  console.log('✅ WhatsApp ক্লায়েন্ট প্রস্তুত!');
+});
+
+// ৩. WhatsApp মেসেজ টেলিগ্রামে পাঠানো
+whatsappClient.on('message', async (message) => {
+  const chatId = message.from;
+  
+  if (chatMappings[chatId]) {
+    const telegramChatId = chatMappings[chatId];
+    try {
+      const telegramMessage = `📱 *WhatsApp থেকে বার্তা:*\n\n${message.body}`;
+      await bot.telegram.sendMessage(telegramChatId, telegramMessage, { parse_mode: 'Markdown' });
+    } catch (error) {
+      console.error('টেলিগ্রামে পাঠাতে সমস্যা:', error);
+    }
+  }
+});
+
+// ৪. টেলিগ্রাম বটের কমান্ডসমূহ
+bot.start((ctx) => {
+  ctx.reply('স্বাগতম! এটি Fast Loan Manager বটের সাথে যুক্ত হোয়াটসঅ্যাপ ব্রিজ।\n\nকমান্ডসমূহ:\n/link <whatsapp_number> - নম্বর যুক্ত করুন\n/status - বর্তমান অবস্থা দেখুন');
+});
+
+bot.command('link', (ctx) => {
+  const args = ctx.message.text.split(' ');
+  if (args.length < 2) return ctx.reply('ব্যবহারবিধি: /link <whatsapp_number>');
+  
+  const whatsappNumber = args[1];
+  chatMappings[whatsappNumber] = ctx.chat.id;
+  fs.writeFileSync('mappings.json', JSON.stringify(chatMappings, null, 2));
+  ctx.reply(`✅ হোয়াটসঅ্যাপ নম্বর ${whatsappNumber} সফলভাবে লিঙ্ক করা হয়েছে।`);
+});
+
+bot.command('status', (ctx) => {
+  ctx.reply(`📊 বটের অবস্থা: সচল। লিঙ্ক করা চ্যাট সংখ্যা: ${Object.keys(chatMappings).length}`);
+});
+
+// ৫. টেলিগ্রাম থেকে হোয়াটসঅ্যাপে বার্তা পাঠানো
+bot.on('message', async (ctx) => {
+  const telegramChatId = ctx.chat.id;
+  const whatsappNumber = Object.keys(chatMappings).find(key => chatMappings[key] === telegramChatId);
+  
+  if (whatsappNumber) {
+    try {
+      await whatsappClient.sendMessage(`${whatsappNumber}@c.us`, ctx.message.text);
+    } catch (e) {
+      ctx.reply('❌ হোয়াটসঅ্যাপে বার্তা পাঠাতে ব্যর্থ।');
+    }
+  }
+});
+
+// ৬. স্টার্টআপ
+whatsappClient.initialize();
+bot.launch();
+console.log('🚀 Fast Loan Manager বট চালু হয়েছে!');
